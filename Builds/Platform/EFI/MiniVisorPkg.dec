@@ -7,3 +7,7 @@
 [Includes]
   ../../../Sources
   ../../../Sources/Platform/EFI
+  ../../../Sources/Zydis/dependencies/zycore/include
+  ../../../Sources/Zydis/include
+  ../../../Sources/Zydis/src
+  ../../../Sources/Zydis/msvc

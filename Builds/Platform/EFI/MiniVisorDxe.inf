@@ -21,6 +21,8 @@
   ../../../Sources/Platform/EFI/EfiPlatform.h
   ../../../Sources/ExtendedPageTables.c
   ../../../Sources/ExtendedPageTables.h
+  ../../../Sources/GuestAgent.c
+  ../../../Sources/GuestAgent.h
   ../../../Sources/HostMain.c
   ../../../Sources/HostMain.h
  #../../../Sources/HostNesting.c
@@ -44,8 +46,19 @@
   ../../../Sources/Ia32.h
   ../../../Sources/Asm.asm
   ../../../Sources/Asm.h
+  ../../../Sources/GuestAgentAsm.asm
   ../../../Sources/Common.h
   ../../../Externals/ia32-doc/out/ia32.h
+  ../../../Sources/Zydis/src/Decoder.c
+  ../../../Sources/Zydis/src/DecoderData.c
+  ../../../Sources/Zydis/src/MetaInfo.c
+  ../../../Sources/Zydis/src/Mnemonic.c
+  ../../../Sources/Zydis/src/Register.c
+  ../../../Sources/Zydis/src/SharedData.c
+  ../../../Sources/Zydis/src/String.c
+  ../../../Sources/Zydis/src/Utils.c
+  ../../../Sources/Zydis/src/Zydis.c
+
 
 [Packages]
   MdePkg/MdePkg.dec
@@ -71,7 +84,7 @@
 
 [BuildOptions.common.DXE_RUNTIME_DRIVER]
   # Detect use of deprecated interfaces if any.
-  MSFT:*_*_*_CC_FLAGS = -D DISABLE_NEW_DEPRECATED_INTERFACES
+  MSFT:*_*_*_CC_FLAGS = -D DISABLE_NEW_DEPRECATED_INTERFACES -D ZYAN_UEFI -D ZYAN_NO_LIBC -D ZYCORE_STATIC_DEFINE -D ZYDIS_STATIC_DEFINE -D ZYDIS_DISABLE_AVX512 -D ZYDIS_DISABLE_KNC -D ZYDIS_DISABLE_FORMATTERR
 
   # Remove DebugLib library instances (ASSERT and such) from the RELEASE binary.
   # https://github.com/tianocore-docs/edk2-UefiDriverWritersGuide/blob/master/31_testing_and_debugging_uefi_drivers/314_debugging_code_statements/3141_configuring_debuglib_with_edk_ii.md

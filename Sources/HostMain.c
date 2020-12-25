@@ -1,4 +1,4 @@
-/*!
+﻿/*!
     @file HostMain.c
 
     @brief Functions for VM-exit handling.

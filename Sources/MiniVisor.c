@@ -1,4 +1,4 @@
-/*!
+﻿/*!
     @file MiniVisor.c
 
     @brief MiniVisor initialization.

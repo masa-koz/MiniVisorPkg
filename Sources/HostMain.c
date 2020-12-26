@@ -16,6 +16,7 @@
 #include "HostNesting.h"
 #include "Asm.h"
 #include "Ia32Utils.h"
+#include "GuestAgent.h"
 
 //
 // Windows-specific:
@@ -36,6 +37,59 @@ typedef struct _WINDOWS_KTRAP_FRAME
     UINT64 Reserved3;
 } WINDOWS_KTRAP_FRAME;
 C_ASSERT(sizeof(WINDOWS_KTRAP_FRAME) == 0x190);
+
+VOID
+AsmGuestAgentEntryPoint (
+    );
+
+VOID
+AsmGuestAgentEntryPointEnd (
+    );
+
+static GUEST_AGENT_STACK g_HostGuestAgentContext;
+UINT64 g_GuestAgentStack = (UINT64)&g_HostGuestAgentContext.u.Layout.Context;
+UINT64 g_AsmGuestAgentEntryPoint = (UINT64)AsmGuestAgentEntryPoint;
+UINT64 g_AsmGuestAgentEntryPointEnd = (UINT64)AsmGuestAgentEntryPointEnd;
+
+static
+BOOLEAN
+IsGuestAgentReturnVmcall (
+    _In_ CONST GUEST_CONTEXT* GuestContext
+    )
+{
+    return ((GuestContext->VmcsBasedRegisters.Rip > g_AsmGuestAgentEntryPoint) &&
+            (GuestContext->VmcsBasedRegisters.Rip < g_AsmGuestAgentEntryPointEnd) &&
+            (GuestContext->VmcsBasedRegisters.Rsp == g_GuestAgentStack));
+}
+
+static
+VOID
+RestoreGuestContext (
+    _In_ CONST GUEST_CONTEXT* GuestContext
+    )
+{
+    UNREFERENCED_PARAMETER(GuestContext);
+
+    LOG_INFO("Returning from the guest agent.");
+    VmxWrite(VMCS_GUEST_RIP, g_HostGuestAgentContext.u.Layout.Context.OriginalGuestRip);
+    VmxWrite(VMCS_GUEST_RSP, g_HostGuestAgentContext.u.Layout.Context.OriginalGuestRsp);
+}
+
+static
+VOID
+InjectGuestAgentTask (
+    _In_ CONST GUEST_CONTEXT* GuestContext,
+    _In_ GUEST_AGENT_COMMAND CommandNumber
+    )
+{
+    LOG_INFO("Transferring to the guest agent.");
+    g_HostGuestAgentContext.u.Layout.Context.OriginalGuestRip = GuestContext->VmcsBasedRegisters.Rip;
+    g_HostGuestAgentContext.u.Layout.Context.OriginalGuestRsp = GuestContext->VmcsBasedRegisters.Rsp;
+    g_HostGuestAgentContext.u.Layout.Context.CommandNumber = CommandNumber;
+
+    VmxWrite(VMCS_GUEST_RIP, g_AsmGuestAgentEntryPoint);
+    VmxWrite(VMCS_GUEST_RSP, g_GuestAgentStack);
+}
 
 //
 // The layout of hypervisor stack when the C-handler (HandleVmExit) is executed.
@@ -92,7 +146,25 @@ HandleMsrAccess (
             //
             value = MAXUINT64;
             break;
-
+        case IA32_GS_BASE:
+            //
+            // Write to this MSR happens at KiSystemStartup for each processor.
+            // We intercept this only once that occurs on the BSP as a trigger
+            // point to initialize the guest agent. We do not emulate this
+            // operation and instead, make the guest retry after returning from
+            // the guest agent. At the 2nd try, VM-exit no longer occurs.
+            //
+            // Note that is place is too early to debug the guest agent. Move to
+            // later such as KeInitAmd64SpecificState for this. This place was
+            // chosen so that none of PatchGuard context is initialized.
+            //
+            UpdateMsrBitmaps(GuestContext->Contexts->SharedMsrBitmaps,
+                             IA32_GS_BASE,
+                             OperationWrite,
+                             FALSE);
+            LOG_INFO("KiSystemStartup being executed. Initializing the guest agent.");
+            InjectGuestAgentTask(GuestContext, GuestAgentCommandInitialize);
+            return;
         default:
             value = __readmsr(msr);
             break;
@@ -247,6 +319,14 @@ HandleVmCall (
         goto Exit;
     }
 
+    //
+    // Take care of the special VMCALL made by the guest agent.
+    //
+    if (IsGuestAgentReturnVmcall(GuestContext) != FALSE)
+    {
+        RestoreGuestContext(GuestContext);
+        goto Exit;
+    }
     //
     // This hypercall may be for us. Check if this is one of accepted numbers.
     //

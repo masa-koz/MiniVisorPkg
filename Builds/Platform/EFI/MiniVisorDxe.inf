@@ -78,6 +78,7 @@
 
 [Guids]
   gEfiEventExitBootServicesGuid                    ## CONSUMES
+  gEfiEventVirtualAddressChangeGuid                ## CONSUMES
 
 [Depex]
   TRUE

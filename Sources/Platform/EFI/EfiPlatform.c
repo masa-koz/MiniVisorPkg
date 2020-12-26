@@ -147,6 +147,41 @@ Exit:
     return status;
 }
 
+extern UINT64 g_GuestAgentStack;
+extern UINT64 g_AsmGuestAgentEntryPoint;
+extern UINT64 g_AsmGuestAgentEntryPointEnd;
+
+EFI_EVENT g_SetVirtualAddressMapEvent = NULL;
+
+static
+VOID
+EFIAPI
+HandleSetVirtualAddressMap (
+    EFI_EVENT Event,
+    VOID* Context
+    )
+{
+    EFI_STATUS status;
+    UINT64 guestAgentStack;
+    UINT64 asmGuestAgentEntryPoint;
+    UINT64 asmGuestAgentEntryPointEnd;
+
+    LOG_INFO("SetVirtualAddressMap was called.");
+
+    guestAgentStack = g_GuestAgentStack;
+    asmGuestAgentEntryPoint = g_AsmGuestAgentEntryPoint;
+    asmGuestAgentEntryPointEnd = g_AsmGuestAgentEntryPointEnd;
+
+    status = gRT->ConvertPointer(0, (VOID**)&g_GuestAgentStack);
+    MV_ASSERT(EFI_ERROR(status) == FALSE);
+
+    status = gRT->ConvertPointer(0, (VOID**)&g_AsmGuestAgentEntryPoint);
+    MV_ASSERT(EFI_ERROR(status) == FALSE);
+
+    status = gRT->ConvertPointer(0, (VOID**)&g_AsmGuestAgentEntryPointEnd);
+    MV_ASSERT(EFI_ERROR(status) == FALSE);
+}
+
 /*!
     @brief The platform specific module entry point.
 
@@ -163,8 +198,24 @@ DriverEntry (
     EFI_SYSTEM_TABLE* SystemTable
     )
 {
+    EFI_STATUS Status;
     ASSERT(ImageHandle == gImageHandle);
     ASSERT(SystemTable->BootServices == gBS);
+
+    //
+    // Create a Set Virtual Address Map event.
+    //
+    Status = gBS->CreateEventEx (
+                    EVT_NOTIFY_SIGNAL,                   // Type
+                    TPL_NOTIFY,                          // NotifyTpl
+                    HandleSetVirtualAddressMap,          // NotifyFunction
+                    NULL,                                // NotifyContext
+                    &gEfiEventVirtualAddressChangeGuid,  // EventGroup
+                    &g_SetVirtualAddressMapEvent          // Event
+                    );
+if (EFI_ERROR (Status)) {
+  return Status;
+}
 
     return ConvertMvToEfiStatus(InitializeMiniVisor());
 }
